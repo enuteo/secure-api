@@ -2,10 +2,15 @@ package bes.tcc.secureapi;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.Mockito.when;
 
+import bes.tcc.secureapi.dto.MyObject;
+import bes.tcc.secureapi.repository.BaseObjectRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,6 +22,7 @@ import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -31,6 +37,20 @@ class ObjectAuthorizationTests {
 
 	@Autowired
 	private MockMvc mockMvc;
+
+	@MockitoBean
+	private BaseObjectRepository baseObjectRepository;
+
+	@BeforeEach
+	void setUpRepository() {
+		when(baseObjectRepository.findById(42L)).thenReturn(Optional.of(new MyObject(42L, "Test object")));
+	}
+
+	@Test
+	void loadsAuthorizedObjectsFromRepository() throws Exception {
+		mockMvc.perform(get("/object/42").header(HttpHeaders.AUTHORIZATION, "Bearer object-role"))
+				.andExpect(status().isOk());
+	}
 
 	@Test
 	void requiresAuthentication() throws Exception {
