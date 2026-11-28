@@ -2,9 +2,13 @@ package bes.tcc.secureapi;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import bes.tcc.secureapi.dto.MyObject;
+import bes.tcc.secureapi.exception.AccessNotAllowedException;
 import bes.tcc.secureapi.repository.BaseObjectRepository;
 import java.time.Instant;
 import java.util.List;
@@ -33,7 +37,8 @@ class ObjectAuthorizationTests {
 			"client-object-role", Map.of(
 					"resource_access", Map.of("auth-api-test", Map.of("roles", List.of("objectrole")))),
 			"other-client-role", Map.of(
-					"resource_access", Map.of("another-client", Map.of("roles", List.of("objectrole")))));
+					"resource_access", Map.of("another-client", Map.of("roles", List.of("objectrole")))),
+			"outsider", Map.of("realm_access", Map.of("roles", List.of("objectrole"))));
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -43,7 +48,12 @@ class ObjectAuthorizationTests {
 
 	@BeforeEach
 	void setUpRepository() {
-		when(baseObjectRepository.findById(42L)).thenReturn(Optional.of(new MyObject(42L, "Test object")));
+		when(baseObjectRepository.findByIdVisibleToUser(42L, "object-role"))
+				.thenReturn(Optional.of(new MyObject(42L, "Test object")));
+		when(baseObjectRepository.findByIdVisibleToUser(42L, "client-object-role"))
+				.thenReturn(Optional.of(new MyObject(42L, "Test object")));
+		when(baseObjectRepository.findByIdVisibleToUser(42L, "outsider"))
+				.thenThrow(new AccessNotAllowedException());
 	}
 
 	@Test
@@ -53,15 +63,25 @@ class ObjectAuthorizationTests {
 	}
 
 	@Test
+	void returnsForbiddenForUsersOutsideTheHierarchy() throws Exception {
+		mockMvc.perform(get("/object/42").header(HttpHeaders.AUTHORIZATION, "Bearer outsider"))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.detail").value("não tem permissão de acessar o recurso"));
+		verify(baseObjectRepository).findByIdVisibleToUser(42L, "outsider");
+	}
+
+	@Test
 	void requiresAuthentication() throws Exception {
 		mockMvc.perform(get("/object/42"))
-				.andExpect(status().isUnauthorized());
+				.andExpect(status().is(407))
+				.andExpect(content().string("não há autenticação"));
 	}
 
 	@Test
 	void rejectsAuthenticatedUserWithoutObjectRole() throws Exception {
 		mockMvc.perform(get("/object/42").header(HttpHeaders.AUTHORIZATION, "Bearer other-role"))
-				.andExpect(status().isForbidden());
+				.andExpect(status().isUnauthorized())
+				.andExpect(content().string("não autorizado a funcionalidade"));
 	}
 
 	@Test
@@ -79,13 +99,15 @@ class ObjectAuthorizationTests {
 	@Test
 	void ignoresObjectRoleFromAnotherClient() throws Exception {
 		mockMvc.perform(get("/object/42").header(HttpHeaders.AUTHORIZATION, "Bearer other-client-role"))
-				.andExpect(status().isForbidden());
+				.andExpect(status().isUnauthorized())
+				.andExpect(content().string("não autorizado a funcionalidade"));
 	}
 
 	@Test
 	void deniesUnconfiguredEndpoints() throws Exception {
 		mockMvc.perform(get("/unconfigured").header(HttpHeaders.AUTHORIZATION, "Bearer object-role"))
-				.andExpect(status().isForbidden());
+				.andExpect(status().isUnauthorized())
+				.andExpect(content().string("não autorizado a funcionalidade"));
 	}
 
 	@TestConfiguration

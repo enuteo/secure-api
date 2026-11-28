@@ -14,6 +14,6 @@ public class OpenApiConfig {
 				.info(new Info()
 						.title("Secure API")
 						.version("1.0.0")
-						.description("Object API secured with Keycloak bearer tokens."));
+						.description("Object API secured with Keycloak bearer tokens and recursive owner hierarchy authorization. Missing authentication returns 407, missing role returns 401, and denied object access returns 403."));
 	}
 }

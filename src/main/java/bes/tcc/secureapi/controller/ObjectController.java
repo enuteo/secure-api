@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.security.core.Authentication;
 import org.springframework.http.ResponseEntity;
 import java.util.Optional;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,19 +34,20 @@ public class ObjectController {
 	@GetMapping("/object/{id}")
 	@Operation(
 			summary = "Get an object by ID",
-			description = "Requires the Keycloak realm role objectrole.",
+			description = "Requires the objectrole role and ownership of the object or a position above its owner in the user hierarchy.",
 			security = @SecurityRequirement(name = "bearerAuth"),
 			responses = {
 					@ApiResponse(
 							responseCode = "200",
 							description = "Object returned successfully.",
 							content = @Content(schema = @Schema(implementation = MyObject.class))),
-					@ApiResponse(responseCode = "401", description = "A valid bearer token is required."),
-					@ApiResponse(responseCode = "403", description = "The token does not have the objectrole role."),
+					@ApiResponse(responseCode = "401", description = "Não autorizado a funcionalidade."),
+					@ApiResponse(responseCode = "403", description = "Não tem permissão de acessar o recurso."),
+					@ApiResponse(responseCode = "407", description = "Não há autenticação."),
 					@ApiResponse(responseCode = "404", description = "No object exists with the requested ID.")
 			})
-	public ResponseEntity<MyObject> getObjectById(@PathVariable Long id) {
-		Optional<MyObject> object = baseObjectRepository.findById(id);
+	public ResponseEntity<MyObject> getObjectById(@PathVariable Long id, Authentication authentication) {
+		Optional<MyObject> object = baseObjectRepository.findByIdVisibleToUser(id, authentication.getName());
 		return ResponseEntity.of(object);
 	}
 }

@@ -1,5 +1,6 @@
 package bes.tcc.secureapi.config;
 
+import bes.tcc.secureapi.exception.SecurityExceptionHandler;
 import bes.tcc.secureapi.security.KeycloakRoleConverter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,10 +18,14 @@ public class SecurityConfig {
 	@Bean
 	SecurityFilterChain securityFilterChain(
 			HttpSecurity http,
+			SecurityExceptionHandler securityExceptionHandler,
 			@Value("${keycloak.client-id}") String clientId) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+				.exceptionHandling(exceptions -> exceptions
+						.authenticationEntryPoint(securityExceptionHandler)
+						.accessDeniedHandler(securityExceptionHandler))
 				.authorizeHttpRequests(authorize -> authorize
 						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 						.requestMatchers(
